@@ -8,8 +8,6 @@ Price Tracker Bot is a Telegram bot that helps you track the prices of your favo
 
 <!-- ![Bot Demo](./demos/priceTrackerbot.gif)
 ![Product Tracking](./demos/ss-pricetracker.jpg) -->
-<img src="./demos/priceTrackerbot.gif" alt="Bot Demo" width="40%">
-<img src="./demos/ss-pricetracker.jpg" alt="Product Tracking" width="40%">
 
 ## Features
 - Track Prices: Simply send the product link to the bot, and it will start tracking the price for you.
