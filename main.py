@@ -1,179 +1,149 @@
 import asyncio
-import threading
-from pyrogram import Client
-from pyrogram import filters
-from pyrogram.types import Message
-from dotenv import load_dotenv
-import os
-import schedule
-import time
-import pytz
-import re
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils import executor
+from config import BOT_TOKEN, ADMIN_IDS
+from db_manager import MongoManager
+from scheduler import BotScheduler
+from scraper import Scraper
+from notifications import send_price_alert, send_summary
+from admin import is_admin, view_users, view_products, analytics_summary, send_announcement, block_user, unblock_user
+from predictive import PricePredictor
 
-from scraper import scrape
-from scheduler import check_prices
-from helpers import fetch_all_products, add_new_product, fetch_one_product, delete_one
-from regex_patterns import flipkart_url_patterns, amazon_url_patterns, all_url_patterns
+# Initialize bot, dispatcher, DB, scraper, scheduler, AI
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot)
+db = MongoManager()
+scraper = Scraper()
+scheduler = BotScheduler()
+predictor = PricePredictor()
 
-load_dotenv()
+# ---------------- USER COMMANDS ----------------
 
-timezone = pytz.timezone("Asia/Kolkata")
-
-
-bot_token = os.getenv("BOT_TOKEN")
-api_id = os.getenv("API_ID")
-api_hash = os.getenv("API_HASH")
-
-app = Client("PriceTrackerBot", api_id=api_id, api_hash=api_hash, bot_token=bot_token)
-
-
-@app.on_message(filters.command("start") & filters.private)
-async def start(_, message: Message):
-    text = (
-        f"Hello {message.chat.username}! 🌟\n\n"
-        "I'm PriceTrackerBot, your personal assistant for tracking product prices. 💸\n\n"
-        "To get started, use the /my_trackings command to start tracking a product. "
-        "Simply send the url:\n"
-        "For example:\n"
-        "I'll keep you updated on any price changes for the products you're tracking. "
-        "Feel free to ask for help with the /help command at any time. Happy tracking! 🚀"
+@dp.message_handler(commands=["start"])
+async def start(message: types.Message):
+    user_id = message.from_user.id
+    db.update_last_active(user_id)
+    await message.answer(
+        "👋 Welcome to PriceTrackerBot!\n"
+        "You can track product prices from multiple platforms.\n\n"
+        "Commands:\n"
+        "/track <URL> - Track a new product\n"
+        "/myproducts - View your tracked products\n"
+        "/summary - Daily/weekly summary\n"
     )
 
-    await message.reply_text(text, quote=True)
-
-
-@app.on_message(filters.command("help") & filters.private)
-async def help(_, message: Message):
-    text = (
-        "🤖 **Price Tracker Bot Help**\n\n"
-        "Here are the available commands:\n"
-        "1. `/my_trackings`: View all the products you are currently tracking.\n"
-        "2. `/stop < product_id >`: Stop tracking a specific product. Replace `<product_id>` with the product ID you want to stop tracking.\n"
-        "3. `/product < product_id >`: Get detailed information about a specific product. Replace `<product_id>` with the product ID you want information about.\n"
-        "\n\n**How It Works:**\n\n"
-        "1. Send the product link from Flipkart.\n"
-        "2. The bot will automatically scrape and track the product.\n"
-        "3. If there is a price change, the bot will notify you with the updated information.\n"
-        "Feel free to use the commands and start tracking your favorite products!\n"
+@dp.message_handler(commands=["track"])
+async def track_product(message: types.Message):
+    user_id = message.from_user.id
+    db.update_last_active(user_id)
+    try:
+        url = message.text.split(" ",1)[1]
+    except IndexError:
+        await message.answer("Please provide a product URL.\nUsage: /track <URL>")
+        return
+    
+    # Scrape product details
+    result = await scraper.scrape_product(url)
+    if not result:
+        await message.answer("Failed to fetch product details. Make sure the URL is correct.")
+        return
+    
+    # Save product to DB
+    db.products.update_one(
+        {"user_id": user_id, "url": url},
+        {"$set": {"name": result["name"], "price": result["price"], "platform": result["platform"], "active": True, "price_history": [{"date": datetime.utcnow(), "price": result["price"]}]}},
+        upsert=True
     )
-    await message.reply_text(text, quote=True)
+    await message.answer(f"✅ Now tracking: {result['name']} at ₹{result['price']}")
 
+@dp.message_handler(commands=["myproducts"])
+async def my_products(message: types.Message):
+    user_id = message.from_user.id
+    db.update_last_active(user_id)
+    products = list(db.products.find({"user_id": user_id, "active": True}))
+    if not products:
+        await message.answer("You have no tracked products.")
+        return
+    msg = "📦 Your Tracked Products:\n\n"
+    for p in products:
+        msg += f"{p['name']} - ₹{p['price']}\nURL: {p['url']}\n\n"
+    await message.answer(msg)
 
-@app.on_message(filters.command("my_trackings") & filters.private)
-async def track(_, message):
+@dp.message_handler(commands=["summary"])
+async def summary(message: types.Message):
+    user_id = message.from_user.id
+    await send_summary(user_id)
+
+# ---------------- ADMIN COMMANDS ----------------
+
+@dp.message_handler(commands=["viewusers"])
+async def cmd_viewusers(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return
+    await message.answer(view_users())
+
+@dp.message_handler(commands=["viewproducts"])
+async def cmd_viewproducts(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return
+    await message.answer(view_products())
+
+@dp.message_handler(commands=["analytics"])
+async def cmd_analytics(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return
+    await message.answer(analytics_summary())
+
+@dp.message_handler(commands=["announce"])
+async def cmd_announce(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return
     try:
-        chat_id = message.chat.id
-        text = await message.reply_text("Fetching Your Products...")
-        products = await fetch_all_products(chat_id)
-        if products:
-            products_message = "Your Tracked Products:\n\n"
+        msg = message.text.split(" ",1)[1]
+    except IndexError:
+        await message.answer("Please provide announcement text.\nUsage: /announce <message>")
+        return
+    await send_announcement(msg)
+    await message.answer("✅ Announcement sent to all users.")
 
-            for i, product in enumerate(products, start=1):
-                _id = product.get("product_id")
-                product_name = product.get("product_name")
-                product_url = product.get("url")
-                product_price = product.get("price")
-
-                products_message += (
-                    f"🏷️ **Product {i}**: [{product_name}]({product_url})\n\n"
-                )
-                products_message += f"💰 **Current Price**: {product_price}\n"
-                products_message += f"❌ Use `/stop {_id}` to Stop tracking\n\n"
-
-            await text.edit(products_message, disable_web_page_preview=True)
-        else:
-            await text.edit("No products added yet")
-    except Exception as e:
-        print(e)
-
-
-@app.on_message(filters.regex("|".join(all_url_patterns)))
-async def track_flipkart_url(_, message):
+@dp.message_handler(commands=["block"])
+async def cmd_block(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return
     try:
-        url = message.text
-        platform = "amazon" if any(re.match(pattern, url) for pattern in amazon_url_patterns) else "flipkart"
-        product_name, price = await scrape(url, platform)
-        status = await message.reply_text("Adding Your Product... Please Wait!!")
-        if product_name and price:
-            id = await add_new_product(
-                message.chat.id, product_name, message.text, price
-            )
-            await status.edit(
-                f'Tracking your product "{product_name}"!\n\n'
-                f"You can use\n `/product {id}` to get more information about it."
-            )
-        else:
-            await status.edit("Failed to scrape !!!")
-    except Exception as e:
-        print(e)
+        user_id = int(message.text.split(" ",1)[1])
+        await message.answer(block_user(user_id))
+    except:
+        await message.answer("Usage: /block <user_id>")
 
-
-@app.on_message(filters.command("product") & filters.private)
-async def track_product(_, message):
+@dp.message_handler(commands=["unblock"])
+async def cmd_unblock(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return
     try:
-        __, id = message.text.split()
-        status = await message.reply_text("Getting Product Info....")
-        if id:
-            product = await fetch_one_product(id)
-            if product:
-                product_name = product.get("product_name")
-                product_url = product.get("url")
-                product_price = product.get("price")
-                maximum_price = product.get("upper")
-                minimum_price = product.get("lower")
+        user_id = int(message.text.split(" ",1)[1])
+        await message.answer(unblock_user(user_id))
+    except:
+        await message.answer("Usage: /unblock <user_id>")
 
-                products_message = (
-                    f"🛍 **Product:** [{product_name}]({product_url})\n\n"
-                    f"💲 **Current Price:** {product_price}\n"
-                    f"📉 **Lowest Price:** {minimum_price}\n"
-                    f"📈 **Highest Price:** {maximum_price}\n"
-                    f"\n\n\nTo Stop Tracking, use `/stop {id}`"
-                )
+# ---------------- CALLBACK HANDLERS ----------------
 
-                await status.edit(products_message, disable_web_page_preview=True)
-            else:
-                await status.edit("Product Not Found")
-        else:
-            await status.edit("Failed to fetch the product")
-    except Exception as e:
-        print(e)
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith("stop_"))
+async def stop_tracking_callback(callback_query: types.CallbackQuery):
+    url = callback_query.data.replace("stop_","")
+    db.products.update_one({"url": url}, {"$set": {"active": False}})
+    await bot.answer_callback_query(callback_query.id, "Tracking stopped for this product.")
 
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith("alert_"))
+async def set_alert_callback(callback_query: types.CallbackQuery):
+    url = callback_query.data.replace("alert_","")
+    await bot.answer_callback_query(callback_query.id, "Feature coming soon: Set custom alert thresholds!")
 
-@app.on_message(filters.command("stop") & filters.private)
-async def delete_product(_, message):
-    try:
-        __, id = message.text.split()
-        status = await message.reply_text("Deleting Product....")
-        chat_id = message.chat.id
-        if id:
-            is_deleted = await delete_one(id, chat_id)
-            if is_deleted:
-                await status.edit("Product Deleted from Your Tracking List")
-            else:
-                await status.edit("Failed to Delete the product")
-        else:
-            await status.edit("Failed to Delete the product")
-    except Exception as e:
-        print(e)
-
-
-schedule.every().day.at("00:00").do(lambda: asyncio.run(check_prices(app))).tag(
-    "daily_job"
-)
-
-
-def run_schedule():
-    while True:
-        schedule.run_pending()
-        time.sleep(5)
-
-
-def main():
-    schedule_thread = threading.Thread(target=run_schedule)
-    schedule_thread.start()
-
-    app.run(print("Bot Running"))
-
+# ---------------- BOT START ----------------
 
 if __name__ == "__main__":
-    main()
+    loop = asyncio.get_event_loop()
+    scheduler.start()  # Start APScheduler
+    print("Bot is running...")
+    executor.start_polling(dp, skip_updates=True)
