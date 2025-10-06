@@ -1,0 +1,39 @@
+# PRODUCTION DOCKER-COMPOSE.YML FOR VPS DEPLOYMENT
+version: '3.8'
+
+services:
+  ptb:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    # Production configuration without volume mounts
+    # This ensures the container uses the code built into the image
+    networks:
+      - ptb-network
+    # Optional: Add resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    # Health check to monitor bot status
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import requests; print('Bot is healthy')"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  ptb-network:
+    driver: bridge
+
+# Optional: Add logging configuration
+# logging:
+#   driver: "json-file"
+#   options:
+#     max-size: "10m"
+#     max-file: "3"
