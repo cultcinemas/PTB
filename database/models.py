@@ -2,25 +2,12 @@
 Database Models for Price Tracker Bot
 """
 from datetime import datetime
-from typing import Optional, List, Dict
-from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from bson import ObjectId
 
-class PyObjectId(ObjectId):
-    """Custom ObjectId validator for Pydantic"""
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-    
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
-    
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+# Simple approach: Use string for ObjectId fields
+# This avoids Pydantic v2 complexity while maintaining functionality
 
 
 class PriceHistory(BaseModel):
@@ -43,7 +30,7 @@ class AlertSettings(BaseModel):
 
 class ProductTracking(BaseModel):
     """Product tracking model"""
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    id: Optional[str] = Field(alias="_id", default=None)
     user_id: int
     product_url: str
     original_url: str  # Store original URL
@@ -80,14 +67,16 @@ class ProductTracking(BaseModel):
     lowest_price: Optional[float] = None
     highest_price: Optional[float] = None
     
-    class Config:
-        json_encoders = {ObjectId: str}
-        populate_by_name = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 
 class User(BaseModel):
     """User model"""
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    id: Optional[str] = Field(alias="_id", default=None)
     user_id: int
     username: Optional[str] = None
     first_name: Optional[str] = None
@@ -121,14 +110,16 @@ class User(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     last_activity: datetime = Field(default_factory=datetime.utcnow)
     
-    class Config:
-        json_encoders = {ObjectId: str}
-        populate_by_name = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 
 class CommunityAlert(BaseModel):
     """Community shared product alert"""
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    id: Optional[str] = Field(alias="_id", default=None)
     shared_by: int
     product_url: str
     affiliate_url: str  # Affiliate link
@@ -142,28 +133,32 @@ class CommunityAlert(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     expires_at: Optional[datetime] = None
     
-    class Config:
-        json_encoders = {ObjectId: str}
-        populate_by_name = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 
 class AdminAnnouncement(BaseModel):
     """Admin announcement model"""
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    id: Optional[str] = Field(alias="_id", default=None)
     message: str
     target_users: str = "all"  # all, premium, active
     sent_count: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
     sent_at: Optional[datetime] = None
     
-    class Config:
-        json_encoders = {ObjectId: str}
-        populate_by_name = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 
 class BotHealth(BaseModel):
     """Bot health monitoring"""
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    id: Optional[str] = Field(alias="_id", default=None)
     scheduler_status: str = "running"
     scraper_status: str = "running"
     db_status: str = "connected"
@@ -180,14 +175,16 @@ class BotHealth(BaseModel):
     
     errors: List[Dict] = Field(default_factory=list)
     
-    class Config:
-        json_encoders = {ObjectId: str}
-        populate_by_name = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
 
 
 class Analytics(BaseModel):
     """Analytics data"""
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    id: Optional[str] = Field(alias="_id", default=None)
     date: datetime = Field(default_factory=datetime.utcnow)
     
     total_users: int = 0
@@ -203,6 +200,8 @@ class Analytics(BaseModel):
     top_platforms: Dict[str, int] = Field(default_factory=dict)
     top_products: List[Dict] = Field(default_factory=list)
     
-    class Config:
-        json_encoders = {ObjectId: str}
-        populate_by_name = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
