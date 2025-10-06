@@ -1,21 +1,23 @@
-# Use official Python 3.12 image
-FROM python:3.12-slim
+# Use a smaller, more secure base image
+FROM python:3.9-slim
 
-# Set working directory
+# Set the working directory
 WORKDIR /app
 
-# Copy requirements
-COPY requirements.txt .
+# Create a non-root user for security
+RUN useradd --create-home --shell /bin/bash appuser
+
+# Copy requirements first to use Docker's cache efficiently
+COPY --chown=appuser:appuser requirements.txt .
 
 # Install dependencies
-RUN apt-get update && apt-get install -y gcc python3-dev && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project files
-COPY . .
+# Switch to the non-root user
+USER appuser
 
-# Expose port (optional if webhooks used)
-EXPOSE 8080
+# Copy the rest of your application code
+COPY --chown=appuser:appuser . .
 
-# Command to run bot
-CMD ["python", "main.py"]
+# Set the command to run your bot
+CMD ["python3", "-m", "PTB"]
