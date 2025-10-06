@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+bot.log
+
+# Database backups
+backup_*/
+*.dump
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+temp/
+tmp/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Environment Files
+# .env is IN repository (placeholder values)
+# .env.local contains REAL credentials (GITIGNORED)
+.env.example
+.env.production
+.env.server
+.env.*.local
+
+# NOTE: .env file IS committed with placeholder values
+# Use .env.local for real credentials on your server
