@@ -19,6 +19,6 @@ USER appuser
 # Copy the rest of your application code
 COPY --chown=appuser:appuser . .
 
-# --- THIS IS THE CORRECTED LINE ---
-# Set the command to run your bot's main.py file
-CMD ["python3", "-m", "PTB.main"]
+# --- THIS IS THE FINAL, CORRECTED COMMAND ---
+# Directly run the main.py script
+CMD ["python3", "PTB/main.py"]
