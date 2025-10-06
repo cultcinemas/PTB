@@ -318,4 +318,39 @@ class DatabaseManager:
         cutoff_date = datetime.utcnow() - timedelta(days=days)
         
         # Delete old inactive trackings
-        result = await self.db
+        result = await self.db.trackings.delete_many({
+            "is_active": False,
+            "updated_at": {"$lt": cutoff_date}
+        })
+        
+        logger.info(f"Cleaned up {result.deleted_count} old trackings")
+        
+        # Delete expired community alerts
+        result = await self.db.community_alerts.delete_many({
+            "expires_at": {"$lt": datetime.utcnow()}
+        })
+        
+        logger.info(f"Cleaned up {result.deleted_count} expired community alerts")
+    
+    async def get_stats(self) -> Dict:
+        """Get overall bot statistics"""
+        total_users = await self.db.users.count_documents({})
+        active_users = await self.db.users.count_documents({"is_active": True})
+        premium_users = await self.db.users.count_documents({"is_premium": True})
+        
+        total_trackings = await self.db.trackings.count_documents({})
+        active_trackings = await self.db.trackings.count_documents({
+            "is_active": True,
+            "is_paused": False
+        })
+        
+        return {
+            "total_users": total_users,
+            "active_users": active_users,
+            "premium_users": premium_users,
+            "total_trackings": total_trackings,
+            "active_trackings": active_trackings
+        }
+
+# Global instance
+db_manager = DatabaseManager()
