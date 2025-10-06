@@ -1,8 +1,9 @@
-# --- RECOMMENDED docker-compose.yml ---
+# FINAL CORRECT DOCKER-COMPOSE.YML
 services:
   ptb:
     build: .
     env_file: .env
+    # This mounts your local PTB folder on top of the one in the container
+    # so your code changes appear instantly.
     volumes:
-      # This mounts your local PTB folder into the container's /app directory
-      - ./PTB:/app
+      - ./PTB:/app/PTB
