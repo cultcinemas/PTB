@@ -1,38 +1,9 @@
-version: "3.9"
+version: '3.8'
 
 services:
-  bot:
+  ptb:
     build: .
-    container_name: PTB
-    env_file:
-      - .env
-    depends_on:
-      - mongo1
-      - mongo2
-    restart: unless-stopped
-
-  mongo1:
-    image: mongo:7.0
-    container_name: mongo1
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example1
+    # This line loads your secret credentials from the .env file
+    env_file: .env
     volumes:
-      - mongo1_data:/data/db
-    ports:
-      - "27017:27017"
-
-  mongo2:
-    image: mongo:7.0
-    container_name: mongo2
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example2
-    volumes:
-      - mongo2_data:/data/db
-    ports:
-      - "27018:27017"
-
-volumes:
-  mongo1_data:
-  mongo2_data:
+      - ./PTB:/app/PTB
