@@ -19,8 +19,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of your project code
 COPY --chown=appuser:appuser . .
 
+# Create logs directory with proper permissions
+RUN mkdir -p /tmp/logs && chown -R appuser:appuser /tmp/logs
+
 # Switch to the non-root user
 USER appuser
+
+# Set environment variable for log file location
+ENV LOG_FILE=/tmp/logs/bot.log
 
 # Directly run the main script using its correct path
 CMD ["python3", "main.py"]
