@@ -19,14 +19,22 @@ from apscheduler.triggers.cron import CronTrigger
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Configure logging (Docker-friendly)
+log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+log_handlers = [logging.StreamHandler(sys.stdout)]
+
+# Try to add file handler if possible
+try:
+    log_file = os.getenv('LOG_FILE', '/tmp/bot.log')
+    log_handlers.append(logging.FileHandler(log_file))
+except PermissionError:
+    # If file logging fails, just use console logging
+    pass
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, log_level, logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('bot.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=log_handlers
 )
 logger = logging.getLogger(__name__)
 
