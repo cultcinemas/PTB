@@ -4,10 +4,10 @@ from dotenv import load_dotenv
 load_dotenv()  # Load .env file
 
 # Telegram Bot
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("7386512270:AAHXGm634MpDeP1EtR_qMW7fea69a9W_zJE")
 
 # MongoDB URIs (support multi-DB)
-MONGO_URIS = os.getenv("MONGO_URIS", "").split(",")  # comma-separated URIs
+MONGO_URIS = os.getenv("MONGO_URIS", "mongodb+srv://pinkybitlu:pinky7268@cluster0.dizew5m.mongodb.net/?retryWrites=true&w=majority").split(",")  # comma-separated URIs
 DB_NAME = os.getenv("DB_NAME", "PriceTrackerDB")
 
 # Scheduler & notification settings
