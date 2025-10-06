@@ -3,7 +3,14 @@ services:
   ptb:
     build: .
     env_file: .env
-    # This mounts your local PTB folder on top of the one in the container
+    restart: unless-stopped
+    # This mounts your local code folder on top of the one in the container
     # so your code changes appear instantly.
     volumes:
-      - ./PTB:/app/PTB
+      - .:/app
+      - /app/__pycache__
+      - /app/.pytest_cache
+    # For VPS deployment, comment out the volumes section above
+    # and uncomment the line below for production:
+    # command: python3 main.py
+    
