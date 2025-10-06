@@ -1,70 +1,52 @@
-import time
-from pymongo import MongoClient
-import os
-from scraper import scrape
-from dotenv import load_dotenv
+import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from datetime import datetime, timedelta
+from db_manager import MongoManager
+from scraper import Scraper
+from notifications import send_price_alert, send_trending_deals
+from config import SCRAPE_INTERVAL, INACTIVITY_DAYS
 
-load_dotenv()
+class BotScheduler:
+    def __init__(self):
+        self.db = MongoManager()
+        self.scraper = Scraper()
+        self.scheduler = AsyncIOScheduler()
+        self.scheduler.add_job(self.run_scraper, "interval", minutes=SCRAPE_INTERVAL)
+        self.scheduler.add_job(self.cleanup_inactive_users, "interval", hours=24)
+        self.scheduler.add_job(self.update_trending_deals, "interval", hours=24)
 
+    async def run_scraper(self):
+        products = list(self.db.products.find({"active": True}))
+        urls = [p["url"] for p in products]
+        if not urls:
+            return
+        results = await self.scraper.scrape_all(urls)
 
-dbclient = MongoClient(os.getenv("MONGO_URI"))
-database = dbclient[os.getenv("DATABASE")]
-collection = database[os.getenv("COLLECTION")]
-PRODUCTS = database[os.getenv("PRODUCTS")]
-
-
-async def check_prices(app):
-    print("Checking Price for Products...")
-    for product in PRODUCTS.find():
-        _, current_price = await scrape(product["url"])
-        time.sleep(1)
-        if current_price is not None:
-            if current_price != product["price"]:
-                PRODUCTS.update_one(
-                    {"_id": product["_id"]},
-                    {
-                        "$set": {
-                            "price": current_price,
-                            "previous_price": product["price"],
-                            "lower": current_price
-                            if current_price < product["lower"]
-                            else product["lower"],
-                            "upper": current_price
-                            if current_price > product["upper"]
-                            else product["upper"],
-                        }
-                    },
+        for result in results:
+            product = self.db.products.find_one({"url": result["url"]})
+            if not product:
+                continue
+            old_price = product.get("price", 0)
+            new_price = result["price"]
+            if old_price != new_price:
+                self.db.products.update_one(
+                    {"url": result["url"]},
+                    {"$set": {"price": new_price, "last_checked": datetime.utcnow()}}
                 )
-    print("Completed")
-    changed_products = await compare_prices()
-    for changed_product in changed_products:
-        cursor = collection.find({"product_id": changed_product})
-        users = list(cursor)
-        for user in users:
-            product = PRODUCTS.find_one({"_id": user.get("product_id")})
-            percentage_change = (
-                (product["price"] - product["previous_price"])
-                / product["previous_price"]
-            ) * 100
-            text = (
-                f"🎉 Good news! The price of {product['product_name']} has changed.\n"
-                f"   - Previous Price: ₹{product['previous_price']:.2f}\n"
-                f"   - Current Price: ₹{product['price']:.2f}\n"
-                f"   - Percentage Change: {percentage_change:.2f}%\n"
-                f"   - [Check it out here]({product['url']})"
-            )
-            await app.send_message(
-                chat_id=user.get("user_id"), text=text, disable_web_page_preview=True
-            )
+                await send_price_alert(product["user_id"], product, old_price, new_price)
 
+    def cleanup_inactive_users(self):
+        deleted_count = self.db.cleanup_inactive_users()
+        print(f"[{datetime.utcnow()}] Auto-deleted {deleted_count} inactive users.")
 
-async def compare_prices():
-    print("Comparing Prices...")
-    product_with_changes = []
-    for product in PRODUCTS.find():
-        current_price = product.get("price")
-        previous_price = product.get("previous_price")
-        if current_price != previous_price:
-            product_with_changes.append(product.get("_id"))
+    async def update_trending_deals(self):
+        # Calculate top price drops in last 24 hours
+        since = datetime.utcnow() - timedelta(hours=24)
+        recent_products = list(self.db.products.find({"last_checked": {"$gte": since}}))
+        trending = sorted(recent_products, key=lambda x: x.get("price_change", 0), reverse=True)[:10]
+        for user_id in self.db.users.distinct("user_id"):
+            await send_trending_deals(user_id, trending)
 
-    return product_with_changes
+    def start(self):
+        self.scheduler.start()
+        print("Scheduler started!")
