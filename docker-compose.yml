@@ -1,9 +1,8 @@
-version: '3.8'
-
+# --- RECOMMENDED docker-compose.yml ---
 services:
   ptb:
     build: .
-    # This line loads your secret credentials from the .env file
     env_file: .env
     volumes:
-      - ./PTB:/app/PTB
+      # This mounts your local PTB folder into the container's /app directory
+      - ./PTB:/app
