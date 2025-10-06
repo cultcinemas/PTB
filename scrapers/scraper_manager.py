@@ -8,7 +8,6 @@ from typing import Dict, Optional
 from urllib.parse import urlparse, parse_qs
 import aiohttp
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
 
 logger = logging.getLogger(__name__)
 
@@ -316,4 +315,3 @@ class ScraperManager:
             return {"error": str(e)}
 
 scraper_manager = ScraperManager()
-        
