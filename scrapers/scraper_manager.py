@@ -4,6 +4,7 @@ Scraper Manager - handles product scraping
 import logging
 import asyncio
 import re
+import random  # --- CHANGE: Import random for delays and user-agent rotation
 from typing import Dict, Optional
 from urllib.parse import urlparse, parse_qs
 import aiohttp
@@ -16,18 +17,27 @@ class ScraperManager:
     
     def __init__(self):
         self.session = None
-        self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        # --- CHANGE: Added a list of realistic User-Agents to rotate
+        self.user_agent_list = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+        ]
         
     async def get_session(self):
         """Get or create aiohttp session"""
-        if not self.session:
+        if not self.session or self.session.closed: # --- CHANGE: Check if session is closed
             headers = {
-                'User-Agent': self.user_agent,
+                # --- CHANGE: Select a random User-Agent for each new session
+                'User-Agent': random.choice(self.user_agent_list),
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
+                'Accept-Encoding': 'gzip, deflate, br',
                 'Connection': 'keep-alive',
                 'Upgrade-Insecure-Requests': '1',
+                'DNT': '1' # Do Not Track header
             }
             connector = aiohttp.TCPConnector(limit=100, ttl_dns_cache=300, use_dns_cache=True)
             self.session = aiohttp.ClientSession(headers=headers, connector=connector)
@@ -55,6 +65,9 @@ class ScraperManager:
         """
         try:
             logger.info(f"Scraping {platform} product: {url}")
+            
+            # --- CHANGE: Introduce a randomized delay before every scrape to mimic human behavior
+            await asyncio.sleep(random.uniform(1.5, 4.0))
             
             if platform == 'amazon':
                 return await self._scrape_amazon(url)
@@ -113,6 +126,8 @@ class ScraperManager:
             session = await self.get_session()
             async with session.get(url, timeout=30) as response:
                 if response.status != 200:
+                    # --- CHANGE: Provide more specific error on non-200 status
+                    logger.error(f"Amazon returned non-200 status: {response.status} for URL: {url}")
                     return {"error": f"HTTP {response.status}"}
                 
                 html = await response.text()
@@ -194,6 +209,7 @@ class ScraperManager:
             session = await self.get_session()
             async with session.get(url, timeout=30) as response:
                 if response.status != 200:
+                    logger.error(f"Flipkart returned non-200 status: {response.status} for URL: {url}")
                     return {"error": f"HTTP {response.status}"}
                 
                 html = await response.text()
